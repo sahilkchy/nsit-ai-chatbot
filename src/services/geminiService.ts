@@ -14,7 +14,17 @@ export interface Message {
  * 3. Streaming: First word appears almost instantly.
  */
 export async function* chatWithNSITStream(history: Message[], userInput: string) {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+  // Robust API Key selection for different platforms (Vite/Vercel/Local)
+  const apiKey = 
+    ((import.meta as any).env?.VITE_GEMINI_API_KEY) || 
+    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : "");
+
+  if (!apiKey) {
+    yield "⚠️ API Key missing! Please set GEMINI_API_KEY in your environment settings.";
+    return;
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   const systemInstruction = `NSIT Bihta Assistant. Use info below ONLY.
     - Site: ${NSIT_URL}
