@@ -64,8 +64,20 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
       const text = chunk.text;
       if (text) yield text;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    yield "Error connecting. Try again.";
+    const errorStr = JSON.stringify(error).toUpperCase();
+    const isQuotaError = 
+      errorStr.includes("429") || 
+      errorStr.includes("QUOTA") || 
+      errorStr.includes("EXHAUSTED") ||
+      error?.message?.toUpperCase().includes("429") ||
+      error?.message?.toUpperCase().includes("QUOTA");
+
+    if (isQuotaError) {
+      yield "⚠️ AI ki limit khatam ho gayi hai (Rate Limit Reached). Kripya 15-20 second ruk kar fir se try karein. 🙏";
+    } else {
+      yield "Error connecting. Try again.";
+    }
   }
 }
