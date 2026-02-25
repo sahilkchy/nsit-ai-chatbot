@@ -21,7 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { chatWithNSIT, Message } from './services/geminiService';
+import { chatWithNSITStream, Message } from './services/geminiService';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -61,10 +61,25 @@ export default function App() {
     setInput('');
     setIsLoading(true);
 
-    const response = await chatWithNSIT(messages, text);
-    
-    setMessages(prev => [...prev, { role: 'model', text: response }]);
-    setIsLoading(false);
+    // Add an empty model message to fill with stream
+    setMessages(prev => [...prev, { role: 'model', text: '' }]);
+
+    let fullText = '';
+    try {
+      const stream = chatWithNSITStream(messages, text);
+      for await (const chunk of stream) {
+        fullText += chunk;
+        setMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = { role: 'model', text: fullText };
+          return newMessages;
+        });
+      }
+    } catch (error) {
+      console.error("Streaming error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const clearChat = () => {
@@ -185,3 +200,4 @@ export default function App() {
     </div>
   );
 }
+
