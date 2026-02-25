@@ -59,5 +59,3 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     yield "Error connecting. Try again.";
   }
 }
-
-
