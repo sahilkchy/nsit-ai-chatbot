@@ -1,4 +1,4 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+declare var puter: any;
 
 const NSIT_URL = "https://www.nsit.in/";
 
@@ -7,25 +7,7 @@ export interface Message {
   text: string;
 }
 
-/**
- * ULTRA-FAST SOLUTION (< 1s):
- * 1. ThinkingLevel.LOW: Minimizes reasoning latency.
- * 2. Compact Prompt: Reduces token processing time.
- * 3. Streaming: First word appears almost instantly.
- */
 export async function* chatWithNSITStream(history: Message[], userInput: string) {
-  // Robust API Key selection for different platforms (Vite/Vercel/Local)
-  const apiKey = 
-    ((import.meta as any).env?.VITE_GEMINI_API_KEY) || 
-    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : "");
-
-  if (!apiKey) {
-    yield "⚠️ API Key missing! Please set GEMINI_API_KEY in your environment settings.";
-    return;
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
-  
   const systemInstruction = `NSIT Bihta Assistant. Use info below ONLY.
     - Site: ${NSIT_URL}
     - Gallery: ${NSIT_URL}gallery
@@ -48,36 +30,22 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     - Formatting: Use emojis, bold text, bullets. Be concise but attractive.`;
 
   try {
-    const responseStream = await ai.models.generateContentStream({
-      model: "gemini-3-flash-preview",
-      contents: [
-        ...history.slice(-4).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-        { role: "user", parts: [{ text: userInput }] }
-      ],
-      config: {
-        systemInstruction,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
-      },
+    // Construct the prompt with history and system instruction
+    const fullPrompt = `${systemInstruction}\n\nRecent History:\n${history.slice(-4).map(m => `${m.role}: ${m.text}`).join('\n')}\n\nUser: ${userInput}`;
+
+    // Use Puter.js to chat
+    const response = await puter.ai.chat(fullPrompt, {
+      model: 'google/gemini-2.5-flash'
     });
 
-    for await (const chunk of responseStream) {
-      const text = chunk.text;
-      if (text) yield text;
+    // Puter returns the full text. We yield it to match the existing generator interface.
+    if (response) {
+      // Yield in small chunks to simulate streaming if possible, 
+      // or just yield the whole thing if it's already there.
+      yield response.toString();
     }
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    const errorStr = JSON.stringify(error).toUpperCase();
-    const isQuotaError = 
-      errorStr.includes("429") || 
-      errorStr.includes("QUOTA") || 
-      errorStr.includes("EXHAUSTED") ||
-      error?.message?.toUpperCase().includes("429") ||
-      error?.message?.toUpperCase().includes("QUOTA");
-
-    if (isQuotaError) {
-      yield "⚠️ AI ki limit khatam ho gayi hai (Rate Limit Reached). Kripya 15-20 second ruk kar fir se try karein. 🙏";
-    } else {
-      yield "Error connecting. Try again.";
-    }
+    console.error("Puter AI Error:", error);
+    yield `❌ Error: ${error?.message || "Could not connect to Puter AI."}`;
   }
 }
