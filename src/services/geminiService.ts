@@ -7,23 +7,23 @@ export interface Message {
   text: string;
 }
 
-export async function chatWithNSIT(history: Message[], userInput: string): Promise<string> {
+export async function* chatWithNSITStream(history: Message[], userInput: string) {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
   
   const systemInstruction = `
     You are the NSIT Bihta Support Assistant. 
-    Your goal is to help students, parents, and staff with queries about Netaji Subhash Institute of Technology (NSIT), Bihta.
+    Help students/staff with queries about NSIT Bihta using ${NSIT_URL}.
     
-    CRITICAL RULES:
-    1. Only answer based on information from ${NSIT_URL}.
-    2. Keep answers user-friendly, concise, and short.
-    3. If you don't know the answer or it's not on the website, politely direct them to contact the college administration.
-    4. Provide direct links for logins (Student/Teacher) if available on the site.
-    5. No sugar-coating. Be professional yet helpful.
+    RULES:
+    1. Only use info from ${NSIT_URL}.
+    2. Be extremely concise and short.
+    3. Direct to admin if info is missing.
+    4. Provide direct login links.
+    5. Professional tone, no fluff.
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const responseStream = await ai.models.generateContentStream({
       model: "gemini-3-flash-preview",
       contents: [
         ...history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
@@ -35,9 +35,13 @@ export async function chatWithNSIT(history: Message[], userInput: string): Promi
       },
     });
 
-    return response.text || "I'm sorry, I couldn't process that request.";
+    for await (const chunk of responseStream) {
+      const text = chunk.text;
+      if (text) yield text;
+    }
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "I'm having trouble connecting to my brain right now. Please try again later.";
+    yield "I'm having trouble connecting right now. Please try again.";
   }
 }
+
