@@ -37,6 +37,20 @@ const QUICK_QUESTIONS = [
   { label: 'Virtual Tour', icon: <Map size={14} className="text-green-500" />, query: 'Lets take a virtual tour' },
 ];
 
+const NSITLogo = () => (
+  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border-2 border-white/50 shadow-sm">
+    <img 
+      src="https://imgs.search.brave.com/QSaFN3XKI8joRhCYlNhBGcdiBWu3cHkR2L9iQGuTGIk/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWcu/amFncmFuam9zaC5j/b20vaW1hZ2VzLzIw/MjIvSnVuZS85NjIw/MjIvMjczMjA3Mzc0/XzM2MDI0ODY3OTQz/ODI3OV81MzE5ODI3/Mjk1MzM2MTg4NjEx/X24uanBn" 
+      alt="NSIT Bihta Logo" 
+      className="w-full h-full object-cover"
+      referrerPolicy="no-referrer"
+      onError={(e) => {
+        (e.target as HTMLImageElement).src = "https://www.nsit.in/images/logo.png";
+      }}
+    />
+  </div>
+);
+
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'model', text: "Hello! 👋 I'm your NSIT Bihta Assistant. How can I help you today?" }
@@ -93,11 +107,11 @@ export default function App() {
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-700 to-blue-500 p-6 text-white flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/30">
-              <School size={24} />
+            <div className="flex items-center justify-center">
+              <NSITLogo />
             </div>
             <div>
-              <h1 className="font-bold text-lg tracking-tight">NSIT Support Assi...</h1>
+              <h1 className="font-bold text-lg tracking-tight">NSIT Support Assistant</h1>
               <div className="flex items-center gap-2 text-xs opacity-90">
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
                 <span>Online • Ready to help</span>
@@ -132,24 +146,21 @@ export default function App() {
                     ? "bg-blue-600 text-white rounded-tr-none" 
                     : "bg-white text-slate-800 rounded-tl-none border border-slate-100"
                 )}>
-                  <div className="markdown-body">
-                    <Markdown>{m.text}</Markdown>
-                  </div>
+                  {m.role === 'model' && m.text === '' ? (
+                    <div className="flex gap-1 py-1">
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                    </div>
+                  ) : (
+                    <div className="markdown-body">
+                      <Markdown>{m.text}</Markdown>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}
           </AnimatePresence>
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white p-4 rounded-2xl rounded-tl-none border border-slate-100 shadow-sm">
-                <div className="flex gap-1">
-                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
-                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                </div>
-              </div>
-            </div>
-          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -200,4 +211,5 @@ export default function App() {
     </div>
   );
 }
+
 
