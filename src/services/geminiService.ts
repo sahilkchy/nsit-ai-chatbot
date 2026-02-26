@@ -52,7 +52,7 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
 
   try {
     const responseStream = await ai.models.generateContentStream({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: [
         ...history.slice(-6).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
         { role: "user", parts: [{ text: userInput }] }
