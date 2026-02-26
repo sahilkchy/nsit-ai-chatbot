@@ -1,3 +1,5 @@
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+
 const NSIT_URL = "https://www.nsit.in/";
 
 export interface Message {
@@ -6,6 +8,16 @@ export interface Message {
 }
 
 export async function* chatWithNSITStream(history: Message[], userInput: string) {
+  // Robust API Key selection for client-side
+  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    yield "⚠️ API Key missing! Please set VITE_GEMINI_API_KEY in your Vercel Environment Variables.";
+    return;
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  
   const systemInstruction = `You are the Official AI Support Assistant for Netaji Subhas Institute of Technology (NSIT), Bihta. 
   Your goal is to provide highly professional, detailed, and helpful information to students, parents, and visitors.
   
@@ -39,41 +51,40 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     - Formatting: Use relevant emojis to make the conversation engaging.`;
 
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ history, userInput, systemInstruction }),
+    const responseStream = await ai.models.generateContentStream({
+      model: "gemini-3-flash-preview",
+      contents: [
+        ...history.slice(-6).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+        { role: "user", parts: [{ text: userInput }] }
+      ],
+      config: {
+        systemInstruction,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+      },
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      const errorStr = JSON.stringify(errorData).toUpperCase();
-      
-      if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("INVALID_ARGUMENT")) {
-        throw new Error("API_KEY_INVALID: Your Gemini API Key is incorrect. Please check your Vercel/Environment settings.");
-      }
-      if (errorStr.includes("API KEY MISSING")) {
-        throw new Error("API_KEY_MISSING: Please set GEMINI_API_KEY in your Vercel Environment Variables.");
-      }
-      throw new Error(errorData.error || "Failed to connect to server");
-    }
-
-    const data = await response.json();
-    
-    // Since we switched to a non-streaming server endpoint for simplicity and reliability,
-    // we yield the full text at once.
-    if (data.text) {
-      yield data.text;
+    for await (const chunk of responseStream) {
+      const text = chunk.text;
+      if (text) yield text;
     }
   } catch (error: any) {
-    console.error("Chat Error:", error);
-    const errorStr = error.message.toUpperCase();
-    if (errorStr.includes("429") || errorStr.includes("QUOTA") || errorStr.includes("LIMIT")) {
-      yield "⚠️ AI ki limit khatam ho gayi hai. Kripya 20 second ruk kar fir se try karein. 🙏";
-    } else if (errorStr.includes("API KEY MISSING")) {
-      yield "❌ Server par API Key nahi mili! Kripya Vercel settings mein GEMINI_API_KEY set karein.";
+    console.error("Gemini API Error:", error);
+    
+    const errorMessage = error?.message || String(error);
+    const errorStr = (JSON.stringify(error) + errorMessage).toUpperCase();
+    
+    const isQuotaError = 
+      errorStr.includes("429") || 
+      errorStr.includes("QUOTA") || 
+      errorStr.includes("EXHAUSTED") ||
+      errorStr.includes("LIMIT");
+
+    if (isQuotaError) {
+      yield "⚠️ AI ki limit khatam ho gayi hai (Rate Limit). Kripya 20 second ruk kar fir se try karein. 🙏";
+    } else if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("INVALID_ARGUMENT")) {
+      yield "❌ API Key galat hai! Kripya Vercel settings mein sahi VITE_GEMINI_API_KEY check karein.";
     } else {
-      yield `❌ Error: ${error.message.slice(0, 100)}...`;
+      yield `❌ Connection Error: ${errorMessage.slice(0, 50)}... Try again.`;
     }
   }
 }
