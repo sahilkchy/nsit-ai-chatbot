@@ -53,6 +53,7 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
 
   ### CORE INSTITUTIONAL DATA:
     - **Official Website:** ${NSIT_URL}
+    - **Virtual Tour:** https://www.nsit.in/tour
     - **Location:** Amhara, Bihta, Patna, Bihar - 801103.
     - **Contact:** Email: info@nsit.in | Admission Hotline: 7781020364 / 7781020346
     - **Affiliation:** B.Tech is affiliated with Aryabhatta Knowledge University (AKU). Diploma is affiliated with SBTE Bihar.
@@ -121,4 +122,3 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     }
   }
 }
-
