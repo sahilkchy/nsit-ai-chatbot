@@ -8,16 +8,66 @@ export interface Message {
   text: string;
 }
 
-// Simple session-based cache
-const sessionCache: Record<string, string> = {};
+// Persistent cache using localStorage
+const CACHE_KEY = "nsit_chat_cache_v1";
+
+function getPersistentCache(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const saved = localStorage.getItem(CACHE_KEY);
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {};
+  }
+}
+
+function setPersistentCache(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const cache = getPersistentCache();
+    cache[key] = value;
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch (e) {
+    console.warn("Cache storage failed", e);
+  }
+}
 
 function searchKnowledgeBase(userInput: string): string | null {
-  const input = userInput.toLowerCase();
+  // Clean input: remove punctuation and extra spaces
+  const cleanInput = userInput.toLowerCase().replace(/[^\w\s]/g, " ");
+  const inputWords = cleanInput.split(/\s+/).filter(w => w.length > 1);
   
-  // Check for keywords in the Knowledge Base
+  const matches: { score: number; value: string }[] = [];
+
   for (const [key, value] of Object.entries(KNOWLEDGE_BASE)) {
-    if (input.includes(key)) {
-      return value;
+    const keyWords = key.toLowerCase().split(/\s+/);
+    let matchCount = 0;
+
+    for (const kw of keyWords) {
+      // Check for exact word, plural/singular, or partial overlap
+      if (inputWords.some(iw => 
+        iw === kw || 
+        iw === kw + 's' || 
+        iw + 's' === kw ||
+        (kw.length > 3 && iw.includes(kw)) ||
+        (iw.length > 3 && kw.includes(iw))
+      )) {
+        matchCount++;
+      }
+    }
+
+    if (matchCount > 0) {
+      // Calculate score based on how many keywords matched
+      const score = (matchCount / keyWords.length) * 100;
+      matches.push({ score, value });
+    }
+  }
+
+  if (matches.length > 0) {
+    const bestMatch = matches.sort((a, b) => b.score - a.score)[0];
+    // If we have a decent match (at least 30% keywords), return it
+    if (bestMatch.score >= 30) {
+      return bestMatch.value;
     }
   }
   
@@ -32,9 +82,10 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     return;
   }
 
-  // Step 2: Check Session Cache (Instant & Free)
-  if (sessionCache[userInput]) {
-    yield sessionCache[userInput];
+  // Step 2: Check Persistent Cache (Instant & Free)
+  const cache = getPersistentCache();
+  if (cache[userInput]) {
+    yield cache[userInput];
     return;
   }
 
@@ -48,39 +99,40 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
 
   const ai = new GoogleGenAI({ apiKey });
   
-  const systemInstruction = `You are the **Official AI Support Assistant for Netaji Subhas Institute of Technology (NSIT), Bihta**. 
+  const systemInstruction = `You are the **Official AI Support Assistant for Netaji Subhas Institute of Technology (NSIT) and Netaji Subhas Institute of Polytechnic (NSIP), Bihta**. 
   Your primary mission is to provide **highly professional, exhaustive, and authoritative** information to students, parents, and visitors.
 
-  ### CORE INSTITUTIONAL DATA:
+  ### INSTITUTIONAL CONTEXT:
+    - **NSIT (B.Tech):** 4-Year degree affiliated with Aryabhatta Knowledge University (AKU).
+    - **NSIP (Diploma/School):** 3-Year Diploma affiliated with SBTE Bihar. Schooling (Nursery to 12th) affiliated with CBSE/Bihar Board.
+    - **Location:** Amhara, Bihta, Patna, Bihar - 801103.
     - **Official Website:** ${NSIT_URL}
     - **Virtual Tour:** https://www.nsit.in/tour
-    - **Location:** Amhara, Bihta, Patna, Bihar - 801103.
     - **Contact:** Email: info@nsit.in | Admission Hotline: 7781020364 / 7781020346
-    - **Affiliation:** B.Tech is affiliated with Aryabhatta Knowledge University (AKU). Diploma is affiliated with SBTE Bihar.
-    - **Approvals:** AICTE Approved, NAAC Accredited.
 
   ### RESPONSE QUALITY STANDARDS (MANDATORY):
-    1. **Depth & Detail:** Never give one-line answers. Even for simple questions, provide context. For example, if asked about CSE, explain the labs, the faculty's focus, and the placement trends.
-    2. **Professional Formatting:** Use Markdown religiously. Use **bold text** for emphasis, ### headings for sections, and bullet points for lists. This makes the response look "crafted" and professional.
+    1. **Depth & Detail:** Never give one-line answers. Even for simple questions, provide context. If asked about a specific course, explain the labs, faculty focus, and placement trends.
+    2. **Professional Formatting:** Use Markdown religiously. Use **bold text** for emphasis, ### headings for sections, and bullet points for lists.
     3. **Tone:** You are a senior administrative representative. Be welcoming, respectful, and extremely helpful.
     4. **Language:** Use a sophisticated blend of English and Hindi (Hinglish) to ensure the user feels understood, but maintain a high standard of vocabulary.
     5. **Structure:** 
        - Start with a polite greeting or acknowledgment.
        - Provide the main answer in detail.
        - Add a "Pro-Tip" or "Additional Info" section if relevant.
-       - End with a call to action (e.g., "You can visit the campus for a personal tour" or "Feel free to call our admission cell").
+       - End with a call to action (e.g., "Visit the campus for a personal tour" or "Call our admission cell").
 
   ### KNOWLEDGE DOMAINS:
-    - **Admissions:** Explain JEE Main/BCECE requirements. Mention the enquiry form.
-    - **Infrastructure:** Highlight the Wi-Fi campus, modern hostels, and advanced labs.
+    - **Admissions:** Explain JEE Main/BCECE/DCECE requirements. Mention the enquiry form and required documents.
+    - **Infrastructure:** Highlight the Wi-Fi campus, modern hostels, advanced labs, and central library.
     - **Placements:** Mention top recruiters like TCS, Infosys, and Wipro.
-    - **NSIT vs NSIP:** Clearly distinguish between the 4-year B.Tech (NSIT) and the 3-year Diploma (NSIP).`;
+    - **Schooling (NSIP):** Cover Nursery to 12th, safety features (female guards, lady attendants), and smart classes.
+    - **Fees & Finance:** Mention Bihar Student Credit Card, scholarships, and installment options.`;
 
   let fullResponse = "";
 
   try {
     const responseStream = await ai.models.generateContentStream({
-      model: "gemini-flash-latest",
+      model: "gemini-1.5-flash",
       contents: [
         ...history.slice(-6).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
         { role: "user", parts: [{ text: userInput }] }
@@ -98,8 +150,8 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
       }
     }
 
-    // Save successful response to cache
-    sessionCache[userInput] = fullResponse;
+    // Save successful response to persistent cache
+    setPersistentCache(userInput, fullResponse);
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
