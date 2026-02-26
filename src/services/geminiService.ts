@@ -59,7 +59,6 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
       ],
       config: {
         systemInstruction,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
       },
     });
 
