@@ -41,5 +41,8 @@ export const KNOWLEDGE_BASE: Record<string, string> = {
   
   "electrical": "### Electrical & Electronics Engineering (EEE)\n\nThe **EEE Department** focuses on power systems, electrical machines, and control engineering. \n\n*   **Labs:** Well-equipped with high-voltage testing kits and advanced simulation tools.",
   
-  "electronics": "### Electronics & Communication Engineering (ECE)\n\nThe **ECE Department** covers the latest trends in communication systems, VLSI design, and embedded systems.\n\n*   **Innovation:** Students are encouraged to work on IoT and wireless communication projects in our specialized labs."
+  "electronics": "### Electronics & Communication Engineering (ECE)\n\nThe **ECE Department** covers the latest trends in communication systems, VLSI design, and embedded systems.\n\n*   **Innovation:** Students are encouraged to work on IoT and wireless communication projects in our specialized labs.",
+  
+  "tour": "### Virtual Campus Tour\n\nExperience the NSIT Bihta campus from the comfort of your home! Our **Virtual Tour** provides a 360-degree view of our state-of-the-art infrastructure, including academic blocks, laboratories, hostels, and sports facilities.\n\n*   **Start the Tour:** [Click here to begin your Virtual Tour](https://www.nsit.in/tour)\n*   **Highlights:** Explore our lush green campus, advanced engineering workshops, and modern residential wings."
 };
+
