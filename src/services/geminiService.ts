@@ -1,5 +1,3 @@
-declare var puter: any;
-
 const NSIT_URL = "https://www.nsit.in/";
 
 export interface Message {
@@ -41,22 +39,41 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     - Formatting: Use relevant emojis to make the conversation engaging.`;
 
   try {
-    // Construct the prompt with history and system instruction
-    const fullPrompt = `${systemInstruction}\n\nRecent History:\n${history.slice(-4).map(m => `${m.role}: ${m.text}`).join('\n')}\n\nUser: ${userInput}`;
-
-    // Use Puter.js to chat
-    const response = await puter.ai.chat(fullPrompt, {
-      model: 'google/gemini-2.5-flash'
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ history, userInput, systemInstruction }),
     });
 
-    // Puter returns the full text. We yield it to match the existing generator interface.
-    if (response) {
-      // Yield in small chunks to simulate streaming if possible, 
-      // or just yield the whole thing if it's already there.
-      yield response.toString();
+    if (!response.ok) {
+      const errorData = await response.json();
+      const errorStr = JSON.stringify(errorData).toUpperCase();
+      
+      if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("INVALID_ARGUMENT")) {
+        throw new Error("API_KEY_INVALID: Your Gemini API Key is incorrect. Please check your Vercel/Environment settings.");
+      }
+      if (errorStr.includes("API KEY MISSING")) {
+        throw new Error("API_KEY_MISSING: Please set GEMINI_API_KEY in your Vercel Environment Variables.");
+      }
+      throw new Error(errorData.error || "Failed to connect to server");
+    }
+
+    const data = await response.json();
+    
+    // Since we switched to a non-streaming server endpoint for simplicity and reliability,
+    // we yield the full text at once.
+    if (data.text) {
+      yield data.text;
     }
   } catch (error: any) {
-    console.error("Puter AI Error:", error);
-    yield `❌ Error: ${error?.message || "Could not connect to Puter AI."}`;
+    console.error("Chat Error:", error);
+    const errorStr = error.message.toUpperCase();
+    if (errorStr.includes("429") || errorStr.includes("QUOTA") || errorStr.includes("LIMIT")) {
+      yield "⚠️ AI ki limit khatam ho gayi hai. Kripya 20 second ruk kar fir se try karein. 🙏";
+    } else if (errorStr.includes("API KEY MISSING")) {
+      yield "❌ Server par API Key nahi mili! Kripya Vercel settings mein GEMINI_API_KEY set karein.";
+    } else {
+      yield `❌ Error: ${error.message.slice(0, 100)}...`;
+    }
   }
 }
