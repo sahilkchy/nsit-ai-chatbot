@@ -1,0 +1,5 @@
+{
+  "name": "NSIT Bihta AI Support Assistant",
+  "description": "An AI-powered chatbot for NSIT Bihta students and staff, providing quick access to campus information, logins, and tours based on official website data.",
+  "requestFramePermissions": ["microphone"]
+}
