@@ -109,97 +109,108 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     return;
   }
 
-  // Randomly select a key to rotate limits
-  const apiKey = keys[Math.floor(Math.random() * keys.length)];
-  const ai = new GoogleGenAI({ apiKey });
+  // Shuffle keys to ensure even distribution
+  const shuffledKeys = [...keys].sort(() => Math.random() - 0.5);
   
-  const systemInstruction = `You are the **Official AI Support Assistant for Netaji Subhas Institute of Technology (NSIT) and Netaji Subhas Institute of Polytechnic (NSIP), Bihta**. 
-  Your primary mission is to provide **highly professional, exhaustive, and authoritative** information to students, parents, and visitors.
+  let lastError: any = null;
 
-  ### INSTITUTIONAL CONTEXT:
-    - **NSIT (B.Tech):** 4-Year degree affiliated with Aryabhatta Knowledge University (AKU).
-    - **NSIP (Diploma/School):** 3-Year Diploma affiliated with SBTE Bihar. Schooling (Nursery to 12th) affiliated with CBSE/Bihar Board.
-    - **Location:** Amhara, Bihta, Patna, Bihar - 801103.
-    - **Official Website:** ${NSIT_URL}
-    - **Virtual Tour:** https://www.nsit.in/tour
-    - **Contact:** Email: info@nsit.in | Admission Hotline: 7781020364 / 7781020346
-
-  ### RESPONSE QUALITY STANDARDS (MANDATORY):
-    1. **Depth & Detail:** Never give one-line answers. Even for simple questions, provide context. If asked about a specific course, explain the labs, faculty focus, and placement trends.
-    2. **Professional Formatting:** Use Markdown religiously. Use **bold text** for emphasis, ### headings for sections, and bullet points for lists.
-    3. **Tone:** You are a senior administrative representative. Be welcoming, respectful, and extremely helpful.
-    4. **Language:** Use a sophisticated blend of English and Hindi (Hinglish) to ensure the user feels understood, but maintain a high standard of vocabulary.
-    5. **Structure:** 
-       - Start with a polite greeting or acknowledgment.
-       - Provide the main answer in detail.
-       - Add a "Pro-Tip" or "Additional Info" section if relevant.
-       - End with a call to action (e.g., "Visit the campus for a personal tour" or "Call our admission cell").
-
-  ### KNOWLEDGE DOMAINS:
-    - **Admissions:** Explain JEE Main/BCECE/DCECE requirements. Mention the enquiry form and required documents.
-    - **Infrastructure:** Highlight the Wi-Fi campus, modern hostels, advanced labs, and central library.
-    - **Placements:** Mention top recruiters like TCS, Infosys, and Wipro.
-    - **Schooling (NSIP):** Cover Nursery to 12th, safety features (female guards, lady attendants), and smart classes.
-    - **Fees & Finance:** Mention Bihar Student Credit Card, scholarships, and installment options.`;
-
-  let fullResponse = "";
-
-  try {
-    const responseStream = await ai.models.generateContentStream({
-      model: "gemini-3-flash-preview",
-      contents: [
-        ...history.slice(-6).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-        { role: "user", parts: [{ text: userInput }] }
-      ],
-      config: {
-        systemInstruction,
-      },
-    });
-
-    for await (const chunk of responseStream) {
-      const text = chunk.text;
-      if (text) {
-        fullResponse += text;
-        yield text;
-      }
-    }
-
-    // Save successful response to persistent cache
-    setPersistentCache(userInput, fullResponse);
-
-  } catch (error: any) {
-    console.error("Gemini API Error:", error);
+  // Try up to 3 different keys if rate limited
+  for (let i = 0; i < Math.min(3, shuffledKeys.length); i++) {
+    const apiKey = shuffledKeys[i];
+    const ai = new GoogleGenAI({ apiKey });
     
-    const errorMessage = error?.message || String(error);
-    const errorStr = (JSON.stringify(error) + errorMessage).toUpperCase();
-    
-    const isQuotaError = 
-      errorStr.includes("429") || 
-      errorStr.includes("QUOTA") || 
-      errorStr.includes("EXHAUSTED") ||
-      errorStr.includes("LIMIT");
+    const systemInstruction = `You are the **Official AI Support Assistant for Netaji Subhas Institute of Technology (NSIT) and Netaji Subhas Institute of Polytechnic (NSIP), Bihta**. 
+    Your primary mission is to provide **highly professional, exhaustive, and authoritative** information to students, parents, and visitors.
 
-    if (isQuotaError) {
-      yield "⚠️ AI ki limit khatam ho gayi hai (Rate Limit). Kripya 20 second ruk kar fir se try karein. 🙏";
-    } else if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("INVALID_ARGUMENT")) {
-      yield "❌ API Key galat hai ya request mein koi error hai! Kripya Vercel settings check karein.";
-    } else if (errorStr.includes("SAFETY")) {
-      yield "🛡️ Maaf kijiyega, AI ne is sawal ka jawab dene se mana kar diya hai (Safety Filter). Kripya dusre tarike se puchein.";
-    } else {
-      // Try to extract a cleaner message if it's JSON
-      let cleanMsg = errorMessage;
-      try {
-        if (errorMessage.includes("{")) {
-          const jsonStart = errorMessage.indexOf("{");
-          const jsonEnd = errorMessage.lastIndexOf("}") + 1;
-          const jsonStr = errorMessage.substring(jsonStart, jsonEnd);
-          const parsed = JSON.parse(jsonStr);
-          cleanMsg = parsed.error?.message || parsed.message || errorMessage;
+    ### INSTITUTIONAL CONTEXT:
+      - **NSIT (B.Tech):** 4-Year degree affiliated with Aryabhatta Knowledge University (AKU).
+      - **NSIP (Diploma/School):** 3-Year Diploma affiliated with SBTE Bihar. Schooling (Nursery to 12th) affiliated with CBSE/Bihar Board.
+      - **Location:** Amhara, Bihta, Patna, Bihar - 801103.
+      - **Official Website:** ${NSIT_URL}
+      - **Virtual Tour:** https://www.nsit.in/tour
+      - **Contact:** Email: info@nsit.in | Admission Hotline: 7781020364 / 7781020346
+
+    ### RESPONSE QUALITY STANDARDS (MANDATORY):
+      1. **Depth & Detail:** Never give one-line answers. Even for simple questions, provide context. If asked about a specific course, explain the labs, faculty focus, and placement trends.
+      2. **Professional Formatting:** Use Markdown religiously. Use **bold text** for emphasis, ### headings for sections, and bullet points for lists.
+      3. **Tone:** You are a senior administrative representative. Be welcoming, respectful, and extremely helpful.
+      4. **Language:** Use a sophisticated blend of English and Hindi (Hinglish) to ensure the user feels understood, but maintain a high standard of vocabulary.
+      5. **Structure:** 
+         - Start with a polite greeting or acknowledgment.
+         - Provide the main answer in detail.
+         - Add a "Pro-Tip" or "Additional Info" section if relevant.
+         - End with a call to action (e.g., "Visit the campus for a personal tour" or "Call our admission cell").
+
+    ### KNOWLEDGE DOMAINS:
+      - **Admissions:** Explain JEE Main/BCECE/DCECE requirements. Mention the enquiry form and required documents.
+      - **Infrastructure:** Highlight the Wi-Fi campus, modern hostels, advanced labs, and central library.
+      - **Placements:** Mention top recruiters like TCS, Infosys, and Wipro.
+      - **Developers:** If asked about developers, mention Sahil & Raunak who built this assistant. Provide their contact emails: sahilkchy@gmail.com and raunakkchy@gmail.com if requested.
+
+    ### IMPORTANT:
+    - If you don't know something, guide them to the official website or contact numbers.
+    - Always maintain a helpful and encouraging attitude.`;
+
+    let fullResponse = "";
+
+    try {
+      const responseStream = await ai.models.generateContentStream({
+        model: "gemini-3-flash-preview",
+        contents: [
+          ...history.slice(-6).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+          { role: "user", parts: [{ text: userInput }] }
+        ],
+        config: {
+          systemInstruction,
+        },
+      });
+
+      for await (const chunk of responseStream) {
+        const text = chunk.text;
+        if (text) {
+          fullResponse += text;
+          yield text;
         }
-      } catch (e) {}
+      }
       
-      yield `❌ Connection Error: ${cleanMsg.slice(0, 100)}... Try again.`;
+      // Save successful response to persistent cache
+      setPersistentCache(userInput, fullResponse);
+      return; // Exit on success
+
+    } catch (error: any) {
+      lastError = error;
+      const errorMessage = error?.message || String(error);
+      const errorStr = (JSON.stringify(error) + errorMessage).toUpperCase();
+      const isQuotaError = errorStr.includes("429") || errorStr.includes("QUOTA") || errorStr.includes("LIMIT");
+      
+      if (isQuotaError && i < Math.min(3, shuffledKeys.length) - 1) {
+        console.warn(`API Key ${i+1} rate limited. Retrying with next key...`);
+        continue; // Try next key
+      }
+      
+      // If not a quota error or last attempt, handle it using the existing error logic
+      const isSafetyError = errorStr.includes("SAFETY");
+      
+      if (isQuotaError) {
+        yield "⚠️ AI ki limit khatam ho gayi hai (Rate Limit). Kripya 20 second ruk kar fir se try karein. 🙏";
+      } else if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("INVALID_ARGUMENT")) {
+        yield "❌ API Key galat hai ya request mein koi error hai! Kripya Vercel settings check karein.";
+      } else if (isSafetyError) {
+        yield "🛡️ Maaf kijiyega, AI ne is sawal ka jawab dene se mana kar diya hai (Safety Filter). Kripya dusre tarike se puchein.";
+      } else {
+        let cleanMsg = errorMessage;
+        try {
+          if (errorMessage.includes("{")) {
+            const jsonStart = errorMessage.indexOf("{");
+            const jsonEnd = errorMessage.lastIndexOf("}") + 1;
+            const jsonStr = errorMessage.substring(jsonStart, jsonEnd);
+            const parsed = JSON.parse(jsonStr);
+            cleanMsg = parsed.error?.message || parsed.message || errorMessage;
+          }
+        } catch (e) {}
+        yield `❌ Connection Error: ${cleanMsg.slice(0, 100)}... Try again.`;
+      }
+      return;
     }
   }
 }
-
