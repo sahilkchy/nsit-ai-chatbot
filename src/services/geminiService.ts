@@ -90,13 +90,27 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
   }
 
   // Step 3: Gemini Fallback (AI Response)
-  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+  const keys = [
+    (import.meta as any).env?.VITE_GEMINI_API_KEY,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_1,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_2,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_3,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_4,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_5,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_6,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_7,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_8,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_9,
+    (import.meta as any).env?.VITE_GEMINI_API_KEY_10,
+  ].filter(k => k && k !== "MY_GEMINI_API_KEY");
 
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+  if (keys.length === 0) {
     yield "⚠️ API Key missing! Please set VITE_GEMINI_API_KEY in your Vercel Environment Variables.";
     return;
   }
 
+  // Randomly select a key to rotate limits
+  const apiKey = keys[Math.floor(Math.random() * keys.length)];
   const ai = new GoogleGenAI({ apiKey });
   
   const systemInstruction = `You are the **Official AI Support Assistant for Netaji Subhas Institute of Technology (NSIT) and Netaji Subhas Institute of Polytechnic (NSIP), Bihta**. 
@@ -132,7 +146,7 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
 
   try {
     const responseStream = await ai.models.generateContentStream({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: [
         ...history.slice(-6).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
         { role: "user", parts: [{ text: userInput }] }
@@ -168,9 +182,24 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
     if (isQuotaError) {
       yield "⚠️ AI ki limit khatam ho gayi hai (Rate Limit). Kripya 20 second ruk kar fir se try karein. 🙏";
     } else if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("INVALID_ARGUMENT")) {
-      yield "❌ API Key galat hai! Kripya Vercel settings mein sahi VITE_GEMINI_API_KEY check karein.";
+      yield "❌ API Key galat hai ya request mein koi error hai! Kripya Vercel settings check karein.";
+    } else if (errorStr.includes("SAFETY")) {
+      yield "🛡️ Maaf kijiyega, AI ne is sawal ka jawab dene se mana kar diya hai (Safety Filter). Kripya dusre tarike se puchein.";
     } else {
-      yield `❌ Connection Error: ${errorMessage.slice(0, 50)}... Try again.`;
+      // Try to extract a cleaner message if it's JSON
+      let cleanMsg = errorMessage;
+      try {
+        if (errorMessage.includes("{")) {
+          const jsonStart = errorMessage.indexOf("{");
+          const jsonEnd = errorMessage.lastIndexOf("}") + 1;
+          const jsonStr = errorMessage.substring(jsonStart, jsonEnd);
+          const parsed = JSON.parse(jsonStr);
+          cleanMsg = parsed.error?.message || parsed.message || errorMessage;
+        }
+      } catch (e) {}
+      
+      yield `❌ Connection Error: ${cleanMsg.slice(0, 100)}... Try again.`;
     }
   }
 }
+
