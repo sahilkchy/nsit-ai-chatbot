@@ -203,7 +203,7 @@ export default function App() {
           
           <div className="mt-4 text-center">
             <p className="text-[10px] text-slate-400 font-medium">
-              Developed by Raunak & Sahil
+              Developed by Sahil & Raunak 
             </p>
           </div>
         </div>
