@@ -15,13 +15,17 @@ import {
   Trash2,
   ChevronRight,
   School,
-  Map
+  Map,
+  Mic,
+  MicOff,
+  FileDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { chatWithNSITStream, Message } from './services/geminiService';
+import { generateProjectPPT } from './services/pptService';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -57,7 +61,54 @@ export default function App() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-IN'; // Supporting Indian English
+
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+        setIsListening(false);
+        // Optionally auto-send
+        // handleSend(transcript);
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+          setIsListening(true);
+        } catch (e) {
+          console.error('Failed to start recognition:', e);
+        }
+      } else {
+        alert('Speech recognition is not supported in your browser.');
+      }
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -119,6 +170,13 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button 
+              onClick={generateProjectPPT}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center"
+              title="Download Project PPT"
+            >
+              <FileDown size={20} className="opacity-80" />
+            </button>
             <a 
               href="mailto:sahilkchy@gmail.com,raunakkchy@gmail.com?subject=NSIT%20Assistant%20Help"
               className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center"
@@ -198,16 +256,30 @@ export default function App() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Ask about admissions, course..."
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all pr-12"
+              placeholder={isListening ? "Listening..." : "Ask about admissions, course..."}
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all pr-24"
             />
-            <button
-              onClick={() => handleSend()}
-              disabled={!input.trim() || isLoading}
-              className="absolute right-2 w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/30"
-            >
-              <Send size={18} />
-            </button>
+            <div className="absolute right-2 flex items-center gap-1">
+              <button
+                onClick={toggleListening}
+                className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
+                  isListening 
+                    ? "bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30" 
+                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                )}
+                title={isListening ? "Stop Listening" : "Voice Input"}
+              >
+                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+              </button>
+              <button
+                onClick={() => handleSend()}
+                disabled={!input.trim() || isLoading}
+                className="w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/30"
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
           
           <div className="mt-4 text-center">
