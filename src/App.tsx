@@ -1,217 +1,222 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
-import { KNOWLEDGE_BASE } from "../constants";
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-const NSIT_URL = "https://www.nsit.in/";
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Send, 
+  User, 
+  GraduationCap, 
+  BookOpen, 
+  CreditCard, 
+  Building2, 
+  Phone, 
+  Trash2,
+  ChevronRight,
+  School,
+  Map
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import Markdown from 'react-markdown';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import { chatWithNSITStream, Message } from './services/geminiService';
 
-export interface Message {
-  role: "user" | "model";
-  text: string;
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 }
 
-// Persistent cache using localStorage
-const CACHE_KEY = "nsit_chat_cache_v1";
+const QUICK_QUESTIONS = [
+  { label: 'Admission', icon: <GraduationCap size={14} className="text-orange-500" />, query: 'Tell me about the admission process at NSIT Bihta.' },
+  { label: 'Courses', icon: <BookOpen size={14} className="text-blue-500" />, query: 'What courses are offered at NSIT Bihta?' },
+  { label: 'Fees', icon: <CreditCard size={14} className="text-yellow-600" />, query: 'What is the fee structure for B.Tech?' },
+  { label: 'Facilities', icon: <Building2 size={14} className="text-red-500" />, query: 'What facilities are available on campus?' },
+  { label: 'Contact', icon: <Phone size={14} className="text-gray-600" />, query: 'How can I contact NSIT Bihta?' },
+  { label: 'Student Login', icon: <User size={14} className="text-indigo-500" />, query: 'Where is the student login page?' },
+  { label: 'Virtual Tour', icon: <Map size={14} className="text-green-500" />, query: 'Lets take a virtual tour' },
+];
 
-function getPersistentCache(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  try {
-    const saved = localStorage.getItem(CACHE_KEY);
-    return saved ? JSON.parse(saved) : {};
-  } catch {
-    return {};
-  }
-}
+const NSITLogo = () => (
+  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border-2 border-white/50 shadow-sm">
+    <img 
+      src="https://imgs.search.brave.com/QSaFN3XKI8joRhCYlNhBGcdiBWu3cHkR2L9iQGuTGIk/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWcu/amFncmFuam9zaC5j/b20vaW1hZ2VzLzIw/MjIvSnVuZS85NjIw/MjIvMjczMjA3Mzc0/XzM2MDI0ODY3OTQz/ODI3OV81MzE5ODI3/Mjk1MzM2MTg4NjEx/X24uanBn" 
+      alt="NSIT Bihta Logo" 
+      className="w-full h-full object-cover"
+      referrerPolicy="no-referrer"
+      onError={(e) => {
+        (e.target as HTMLImageElement).src = "https://www.nsit.in/images/logo.png";
+      }}
+    />
+  </div>
+);
 
-function setPersistentCache(key: string, value: string) {
-  if (typeof window === "undefined") return;
-  try {
-    const cache = getPersistentCache();
-    cache[key] = value;
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-  } catch (e) {
-    console.warn("Cache storage failed", e);
-  }
-}
+export default function App() {
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'model', text: "Hello! 👋 I'm your NSIT Bihta Assistant. How can I help you today?" }
+  ]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-function searchKnowledgeBase(userInput: string): string | null {
-  // Clean input: remove punctuation and extra spaces
-  const cleanInput = userInput.toLowerCase().replace(/[^\w\s]/g, " ");
-  const inputWords = cleanInput.split(/\s+/).filter(w => w.length > 1);
-  
-  const matches: { score: number; value: string }[] = [];
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-  for (const [key, value] of Object.entries(KNOWLEDGE_BASE)) {
-    const keyWords = key.toLowerCase().split(/\s+/);
-    let matchCount = 0;
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-    for (const kw of keyWords) {
-      // Check for exact word, plural/singular, or partial overlap
-      if (inputWords.some(iw => 
-        iw === kw || 
-        iw === kw + 's' || 
-        iw + 's' === kw ||
-        (kw.length > 3 && iw.includes(kw)) ||
-        (iw.length > 3 && kw.includes(iw))
-      )) {
-        matchCount++;
-      }
-    }
+  const handleSend = async (text: string = input) => {
+    if (!text.trim() || isLoading) return;
 
-    if (matchCount > 0) {
-      // Calculate score based on how many keywords matched
-      const score = (matchCount / keyWords.length) * 100;
-      matches.push({ score, value });
-    }
-  }
+    const userMessage: Message = { role: 'user', text };
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
 
-  if (matches.length > 0) {
-    const bestMatch = matches.sort((a, b) => b.score - a.score)[0];
-    // If we have a decent match (at least 30% keywords), return it
-    if (bestMatch.score >= 30) {
-      return bestMatch.value;
-    }
-  }
-  
-  return null;
-}
+    // Add an empty model message to fill with stream
+    setMessages(prev => [...prev, { role: 'model', text: '' }]);
 
-export async function* chatWithNSITStream(history: Message[], userInput: string) {
-  // Step 1: Check Knowledge Base first (Instant & Free)
-  const localAnswer = searchKnowledgeBase(userInput);
-  if (localAnswer) {
-    yield localAnswer;
-    return;
-  }
-
-  // Step 2: Check Persistent Cache (Instant & Free)
-  const cache = getPersistentCache();
-  if (cache[userInput]) {
-    yield cache[userInput];
-    return;
-  }
-
-  // Step 3: Gemini Fallback (AI Response)
-  const keys = [
-    (import.meta as any).env?.VITE_GEMINI_API_KEY,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_1,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_2,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_3,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_4,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_5,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_6,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_7,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_8,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_9,
-    (import.meta as any).env?.VITE_GEMINI_API_KEY_10,
-  ].filter(k => k && k !== "MY_GEMINI_API_KEY");
-
-  if (keys.length === 0) {
-    yield "⚠️ API Key missing! Please set VITE_GEMINI_API_KEY in your Vercel Environment Variables.";
-    return;
-  }
-
-  // Shuffle keys to ensure even distribution
-  const shuffledKeys = [...keys].sort(() => Math.random() - 0.5);
-  
-  let lastError: any = null;
-
-  // Try up to 3 different keys if rate limited
-  for (let i = 0; i < Math.min(3, shuffledKeys.length); i++) {
-    const apiKey = shuffledKeys[i];
-    const ai = new GoogleGenAI({ apiKey });
-    
-    const systemInstruction = `You are the **Official AI Support Assistant for Netaji Subhas Institute of Technology (NSIT) and Netaji Subhas Institute of Polytechnic (NSIP), Bihta**. 
-    Your primary mission is to provide **highly professional, exhaustive, and authoritative** information to students, parents, and visitors.
-
-    ### INSTITUTIONAL CONTEXT:
-      - **NSIT (B.Tech):** 4-Year degree affiliated with Aryabhatta Knowledge University (AKU).
-      - **NSIP (Diploma/School):** 3-Year Diploma affiliated with SBTE Bihar. Schooling (Nursery to 12th) affiliated with CBSE/Bihar Board.
-      - **Location:** Amhara, Bihta, Patna, Bihar - 801103.
-      - **Official Website:** ${NSIT_URL}
-      - **Virtual Tour:** https://www.nsit.in/tour
-      - **Contact:** Email: info@nsit.in | Admission Hotline: 7781020364 / 7781020346
-
-    ### RESPONSE QUALITY STANDARDS (MANDATORY):
-      1. **Depth & Detail:** Never give one-line answers. Even for simple questions, provide context. If asked about a specific course, explain the labs, faculty focus, and placement trends.
-      2. **Professional Formatting:** Use Markdown religiously. Use **bold text** for emphasis, ### headings for sections, and bullet points for lists.
-      3. **Tone:** You are a senior administrative representative. Be welcoming, respectful, and extremely helpful.
-      4. **Language:** Use a sophisticated blend of English and Hindi (Hinglish) to ensure the user feels understood, but maintain a high standard of vocabulary.
-      5. **Structure:** 
-         - Start with a polite greeting or acknowledgment.
-         - Provide the main answer in detail.
-         - Add a "Pro-Tip" or "Additional Info" section if relevant.
-         - End with a call to action (e.g., "Visit the campus for a personal tour" or "Call our admission cell").
-
-    ### KNOWLEDGE DOMAINS:
-      - **Admissions:** Explain JEE Main/BCECE/DCECE requirements. Mention the enquiry form and required documents.
-      - **Infrastructure:** Highlight the Wi-Fi campus, modern hostels, advanced labs, and central library.
-      - **Placements:** Mention top recruiters like TCS, Infosys, and Wipro.
-      - **Developers:** If asked about developers, mention Sahil & Raunak who built this assistant. Provide their contact emails: sahilkchy@gmail.com and raunakkchy@gmail.com.
-      - **Help & Feedback:** If users want to give feedback or need help, tell them to use the "HELP" button in the header or the "Send Feedback" link in the footer to email the developers directly.
-
-    ### IMPORTANT:
-    - If you don't know something, guide them to the official website or contact numbers.
-    - Always maintain a helpful and encouraging attitude.`;
-
-    let fullResponse = "";
-
+    let fullText = '';
     try {
-      const responseStream = await ai.models.generateContentStream({
-        model: "gemini-3-flash-preview",
-        contents: [
-          ...history.slice(-6).map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-          { role: "user", parts: [{ text: userInput }] }
-        ],
-        config: {
-          systemInstruction,
-        },
-      });
-
-      for await (const chunk of responseStream) {
-        const text = chunk.text;
-        if (text) {
-          fullResponse += text;
-          yield text;
-        }
+      const stream = chatWithNSITStream(messages, text);
+      for await (const chunk of stream) {
+        fullText += chunk;
+        setMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = { role: 'model', text: fullText };
+          return newMessages;
+        });
       }
-      
-      // Save successful response to persistent cache
-      setPersistentCache(userInput, fullResponse);
-      return; // Exit on success
-
-    } catch (error: any) {
-      lastError = error;
-      const errorMessage = error?.message || String(error);
-      const errorStr = (JSON.stringify(error) + errorMessage).toUpperCase();
-      const isQuotaError = errorStr.includes("429") || errorStr.includes("QUOTA") || errorStr.includes("LIMIT");
-      
-      if (isQuotaError && i < Math.min(3, shuffledKeys.length) - 1) {
-        console.warn(`API Key ${i+1} rate limited. Retrying with next key...`);
-        continue; // Try next key
-      }
-      
-      // If not a quota error or last attempt, handle it using the existing error logic
-      const isSafetyError = errorStr.includes("SAFETY");
-      
-      if (isQuotaError) {
-        yield "⚠️ AI ki limit khatam ho gayi hai (Rate Limit). Kripya 20 second ruk kar fir se try karein. 🙏";
-      } else if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("INVALID_ARGUMENT")) {
-        yield "❌ API Key galat hai ya request mein koi error hai! Kripya Vercel settings check karein.";
-      } else if (isSafetyError) {
-        yield "🛡️ Maaf kijiyega, AI ne is sawal ka jawab dene se mana kar diya hai (Safety Filter). Kripya dusre tarike se puchein.";
-      } else {
-        let cleanMsg = errorMessage;
-        try {
-          if (errorMessage.includes("{")) {
-            const jsonStart = errorMessage.indexOf("{");
-            const jsonEnd = errorMessage.lastIndexOf("}") + 1;
-            const jsonStr = errorMessage.substring(jsonStart, jsonEnd);
-            const parsed = JSON.parse(jsonStr);
-            cleanMsg = parsed.error?.message || parsed.message || errorMessage;
-          }
-        } catch (e) {}
-        yield `❌ Connection Error: ${cleanMsg.slice(0, 100)}... Try again.`;
-      }
-      return;
+    } catch (error) {
+      console.error("Streaming error:", error);
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
+
+  const clearChat = () => {
+    setMessages([{ role: 'model', text: "Hello! 👋 I'm your NSIT Bihta Assistant. How can I help you today?" }]);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-blue-600 to-blue-400 flex items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[85vh]">
+        
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-700 to-blue-500 p-6 text-white flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center justify-center">
+              <NSITLogo />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg tracking-tight">NSIT Support Assistant</h1>
+              <div className="flex items-center gap-2 text-xs opacity-90">
+                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                <span>Online • Ready to help</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <a 
+              href="mailto:sahilkchy@gmail.com,raunakkchy@gmail.com?subject=NSIT%20Assistant%20Help"
+              className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center"
+              title="Help & Feedback"
+            >
+              <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded mr-1">HELP</span>
+            </a>
+            <button 
+              onClick={clearChat}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              title="Clear Chat"
+            >
+              <Trash2 size={20} className="opacity-80" />
+            </button>
+          </div>
+        </div>
+
+        {/* Chat Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
+          <AnimatePresence initial={false}>
+            {messages.map((m, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                className={cn(
+                  "flex w-full",
+                  m.role === 'user' ? "justify-end" : "justify-start"
+                )}
+              >
+                <div className={cn(
+                  "max-w-[85%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed",
+                  m.role === 'user' 
+                    ? "bg-blue-600 text-white rounded-tr-none" 
+                    : "bg-white text-slate-800 rounded-tl-none border border-slate-100"
+                )}>
+                  {m.role === 'model' && m.text === '' ? (
+                    <div className="flex gap-1 py-1">
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                    </div>
+                  ) : (
+                    <div className="markdown-body">
+                      <Markdown>{m.text}</Markdown>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Quick Questions */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-white">
+          <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-3">Quick Questions:</p>
+          <div className="flex flex-wrap gap-2">
+            {QUICK_QUESTIONS.map((q) => (
+              <button
+                key={q.label}
+                onClick={() => handleSend(q.query)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-full text-xs font-medium text-slate-600 hover:text-blue-600 transition-all active:scale-95"
+              >
+                {q.icon}
+                {q.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Input Area */}
+        <div className="p-6 pt-2 bg-white">
+          <div className="relative flex items-center gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Ask about admissions, course..."
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all pr-12"
+            />
+            <button
+              onClick={() => handleSend()}
+              disabled={!input.trim() || isLoading}
+              className="absolute right-2 w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg shadow-blue-500/30"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+          
+          <div className="mt-4 text-center">
+            <p className="text-[10px] text-slate-500 font-medium">
+              Developed by Sahil & Raunak
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
