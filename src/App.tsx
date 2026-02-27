@@ -17,15 +17,13 @@ import {
   School,
   Map,
   Mic,
-  MicOff,
-  FileDown
+  MicOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Markdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { chatWithNSITStream, Message } from './services/geminiService';
-import { generateProjectPPT } from './services/pptService';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -170,13 +168,6 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button 
-              onClick={generateProjectPPT}
-              className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center"
-              title="Download Project PPT"
-            >
-              <FileDown size={20} className="opacity-80" />
-            </button>
             <a 
               href="mailto:sahilkchy@gmail.com,raunakkchy@gmail.com?subject=NSIT%20Assistant%20Help"
               className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center"
