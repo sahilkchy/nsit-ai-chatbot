@@ -145,8 +145,8 @@ export async function* chatWithNSITStream(history: Message[], userInput: string)
       - **Admissions:** Explain JEE Main/BCECE/DCECE requirements. Mention the enquiry form and required documents.
       - **Infrastructure:** Highlight the Wi-Fi campus, modern hostels, advanced labs, and central library.
       - **Placements:** Mention top recruiters like TCS, Infosys, and Wipro.
-      - **Developers:** If asked about developers, mention Sahil & Raunak who built this assistant. Provide their contact emails: sahilkchy@gmail.com and raunakkchy@gmail.com.
-      - **Help & Feedback:** If users want to give feedback or need help, tell them to use the "HELP" button in the header or the "Send Feedback" link in the footer to email the developers directly.
+      - **Developers:** If asked about developers, mention Sahil & Raunak who built this assistant. Provide their contact emails: sahilkchy@gmail.com and raunakkchy@gmail.com If someone asks who created you, don't tell them about Gimmie Aai, just tell them about this chatbot.
+      - **Help & Feedback:** If users want to give feedback or need help, tell them to use the "HELP" button in the header to email the developers directly.
 
     ### IMPORTANT:
     - If you don't know something, guide them to the official website or contact numbers.
