@@ -118,13 +118,22 @@ export default function App() {
               </div>
             </div>
           </div>
-          <button 
-            onClick={clearChat}
-            className="p-2 hover:bg-white/10 rounded-full transition-colors"
-            title="Clear Chat"
-          >
-            <Trash2 size={20} className="opacity-80" />
-          </button>
+          <div className="flex items-center gap-1">
+            <a 
+              href="mailto:sahilkchy@gmail.com,raunakkchy@gmail.com?subject=NSIT%20Assistant%20Help"
+              className="p-2 hover:bg-white/10 rounded-full transition-colors flex items-center justify-center"
+              title="Help & Feedback"
+            >
+              <span className="text-[10px] font-bold bg-white/20 px-1.5 py-0.5 rounded mr-1">HELP</span>
+            </a>
+            <button 
+              onClick={clearChat}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              title="Clear Chat"
+            >
+              <Trash2 size={20} className="opacity-80" />
+            </button>
+          </div>
         </div>
 
         {/* Chat Area */}
@@ -202,14 +211,20 @@ export default function App() {
           </div>
           
           <div className="mt-4 text-center">
-            <p className="text-[10px] text-slate-400 font-medium">
-              Developed by Sahil & Raunak 
+            <p className="text-[10px] text-slate-500 font-medium">
+              Developed by Sahil & Raunak
             </p>
+          
+            <a 
+              href="mailto:sahilkchy@gmail.com,raunakkchy@gmail.com?subject=NSIT%20Assistant%20Feedback"
+              className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-semibold transition-colors bg-blue-50 px-3 py-1 rounded-full border border-blue-100"
+            >
+              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse"></span>
+              Send Feedback to Developers
+            </a>
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-
