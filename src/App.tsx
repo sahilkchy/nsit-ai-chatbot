@@ -219,9 +219,7 @@ export default function App() {
               href="mailto:sahilkchy@gmail.com,raunakkchy@gmail.com?subject=NSIT%20Assistant%20Feedback"
               className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-semibold transition-colors bg-blue-50 px-3 py-1 rounded-full border border-blue-100"
             >
-              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse"></span>
-              Send Feedback to Developers
-            </a>
+            
           </div>
         </div>
       </div>
